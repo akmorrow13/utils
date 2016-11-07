@@ -39,13 +39,19 @@ import scala.collection.mutable.ListBuffer
  *
  * Interval tree supports rebalancing after either the left or right subtree depth
  * surpasses the other subtree depth past a given threshold.
+ *
+ * @param groupKeys Function that takes iterator of (K,T) pairs and groups them in a way that
+ * will insert them in a tree
+ * @tparam K Interval Parameter
+ * @tparam T Data type stored in tree
  */
-
-class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
+class IntervalTree[K <: Interval[K], T: ClassTag] extends Serializable {
   var root: Node[K, T] = null
   var leftDepth: Long = 0
   var rightDepth: Long = 0
+  // determines the difference between depths before the tree should be rebalanced
   val threshold = 15
+  // used to group elements before inserting into tree
   var nodeCount: Long = 0
 
   /**
@@ -110,43 +116,45 @@ class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
     val nodes: List[Node[K, T]] = inOrder().
       sortWith(_.getInterval.start < _.getInterval.start)
     nodes.foreach(r => {
-      println(r.getInterval)
-      r.data.foreach(e => println(e))
+      println(s"${r.getInterval}, Records in node: ${r.data.length}")
     })
   }
 
   /**
    * Inserts single value into tree
-   * @param k key of element
-   * @param v value of element
+   * @param kv key, value tuple of element
    */
-  def insert(k: K, v: T): Unit = {
-    insert(k, Iterator(v))
+  def insert(kv: (K, T)): Unit = {
+    insertInterval(kv)
   }
 
-  /**
-   *
-   * @param k key to insert values
-   * @param vs values to insert associated with key r
-   */
-  def insert(k: K, vs: Iterator[T]): Unit = {
-    insertInterval(k, vs)
-    if (Math.abs(leftDepth - rightDepth) > threshold) {
-      rebalance()
-    }
+  def insert(kvs: Iterator[(K, T)]): Unit = {
+    kvs.map(kv => insertInterval(kv))
   }
 
-  /**
-   * Inserts values grouped by keys
-   * @param kvs key, value data to insert into tree
-   */
-  def insert(kvs: Iterator[(K, T)]) = {
-    val grouped = kvs.toList.groupBy(_._1)
-    grouped.map(kv => insertInterval(kv._1, kv._2.map(_._2).toIterator))
-    if (Math.abs(leftDepth - rightDepth) > threshold) {
-      rebalance()
-    }
-  }
+  //  /**
+  //   *
+  //   * @param k key to insert values
+  //   * @param vs values to insert associated with key r
+  //   */
+  //  def insert(k: K, vs: Iterator[T]): Unit = {
+  //    insertInterval(k, vs)
+  //    if (Math.abs(leftDepth - rightDepth) > threshold) {
+  //      rebalance()
+  //    }
+  //  }
+  //
+  //  /**
+  //   * Inserts values grouped by keys
+  //   * @param kvs key, value data to insert into tree
+  //   */
+  //  def insert(kvs: Iterator[(K, T)]) = {
+  //    val grouped: Map[K, List[(K,T)]] = groupKeys(kvs)
+  //    grouped.map(kv => insertInterval(kv._1, kv._2.toIterator))
+  //    if (Math.abs(leftDepth - rightDepth) > threshold) {
+  //      rebalance()
+  //    }
+  //  }
 
   /*
   * Finds an existing node (keyed by Interval) to insert the data into,
@@ -167,52 +175,44 @@ class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
   *
   *
   */
-  private def insertInterval(interval: K, vs: Iterator[T]) = {
+  private def insertInterval(kv: (K, T)) = {
     if (root == null) {
       nodeCount += 1
-      root = new Node[K, T](interval)
-      root.multiput(vs)
+      root = new Node[K, T](kv)
+      root.put(kv)
     }
     var curr: Node[K, T] = root
     var parent: Node[K, T] = null
     var search: Boolean = true
-    var leftSide: Boolean = false
-    var rightSide: Boolean = false
     var tempLeftDepth: Long = 0
     var tempRightDepth: Long = 0
 
     while (search) {
-      curr.subtreeMax = Math.max(curr.subtreeMax, interval.end)
+      curr.subtreeMax = Math.max(curr.subtreeMax, kv._1.end)
       parent = curr
-      if (curr.greaterThan(interval)) { //left traversal
-        if (!leftSide && !rightSide) {
-          leftSide = true
-        }
+      if (curr.aboutEquals(kv._1)) { // insert into current node
+        curr.put(kv)
+        search = false
+      } else if (curr.greaterThan(kv._1)) { //left traversal
         tempLeftDepth += 1
         curr = curr.leftChild
         if (curr == null) {
-          curr = new Node(interval)
-          curr.multiput(vs)
+          curr = new Node(kv)
+          curr.put(kv)
           parent.leftChild = curr
           nodeCount += 1
           search = false
         }
-      } else if (curr.lessThan(interval)) { //right traversal
-        if (!leftSide && !rightSide) {
-          rightSide = true
-        }
+      } else { //right traversal
         tempRightDepth += 1
         curr = curr.rightChild
         if (curr == null) {
-          curr = new Node(interval)
-          curr.multiput(vs)
+          curr = new Node(kv)
+          curr.put(kv)
           parent.rightChild = curr
           nodeCount += 1
           search = false
         }
-      } else { // insert new id, given id is not in tree
-        curr.multiput(vs)
-        search = false
       }
     }
     // done searching, set our max depths
@@ -248,7 +248,7 @@ class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
   def mapValues[T2: ClassTag](f: T => T2): IntervalTree[K, T2] = {
     val mappedList: List[Node[K, T2]] =
       inOrder.map(elem => {
-        Node(elem.getInterval, elem.data.map(f))
+        new Node(elem.data.toMap.mapValues(f).toArray)
       })
     new IntervalTree[K, T2](mappedList)
 
@@ -263,9 +263,8 @@ class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
   def filter(pred: (K, T) => Boolean): IntervalTree[K, T] = {
     val filteredNodes = inOrder
       .map(node => {
-        val mapped: Array[T] = node.data.map(r => (node.getInterval, r))
-          .filter(r => pred(r._1, r._2)).map(_._2)
-        new Node(node.getInterval, mapped)
+        val mapped: Array[(K, T)] = node.data.filter(r => pred(r._1, r._2))
+        new Node(mapped)
       }).filter(!_.data.isEmpty)
     new IntervalTree[K, T](filteredNodes)
   }
@@ -341,7 +340,7 @@ class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
           search = false
         }
       } else { // attempting to replace a node already in tree. Merge
-        curr.multiput(n.get().map(_._2))
+        curr.multiput(n.get())
         search = false
       }
     }
@@ -435,4 +434,17 @@ class IntervalTree[K <: Interval, T: ClassTag] extends Serializable {
     seen ++= inOrder(n.rightChild)
     seen.toList
   }
+}
+
+object IntervalTree {
+  val nodeSize = 1000
+
+  def apply[K <: Interval[K], T: ClassTag](data: Iterator[(K, T)]) = {
+    // group data into Nodes by nodeSize chunks
+    val nodes = data.toArray
+      .groupBy(r => r._1.mid % nodeSize + r._1.mid)
+      .map(r => new Node(r._2))
+    new IntervalTree(nodes.toList)
+  }
+
 }

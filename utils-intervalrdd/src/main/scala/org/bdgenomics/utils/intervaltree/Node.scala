@@ -21,11 +21,16 @@ package org.bdgenomics.utils.intervaltree
 import java.io.Serializable
 import scala.reflect.ClassTag
 
-protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializable {
+protected class Node[K <: Interval[K], T: ClassTag](init: Array[(K, T)]) extends Serializable {
 
   /* left and right children of this node */
   var leftChild: Node[K, T] = null
   var rightChild: Node[K, T] = null
+
+  /* stores data values for this node */
+  var data: Array[(K, T)] = init
+
+  def interval = data.map(_._1).reduce((k1, k2) => k1.hull(k2))
 
   /* maximum end that is seen in this node. used for search */
   var subtreeMax: Long = interval.end
@@ -33,13 +38,9 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
   /* returns interval for this node */
   def getInterval: K = interval
 
-  /* stores data values for this node */
-  var data: Array[T] = Array[T]()
-
   /* alternative constructor of node from data */
-  def this(interval: K, data: Array[T]) = {
-    this(interval)
-    multiput(data)
+  def this(kv: (K, T)) = {
+    this(Array(kv))
   }
 
   /* gets the number of data values in this node */
@@ -48,11 +49,7 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
   }
 
   /* clones node */
-  override def clone: Node[K, T] = {
-    val n: Node[K, T] = new Node(interval)
-    n.data = data
-    n
-  }
+  override def clone: Node[K, T] = new Node(data)
 
   /* resets left and right child to null */
   def clearChildren() = {
@@ -65,7 +62,7 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
    *
    * @param rs: Array of elements to place in node
    */
-  def multiput(rs: Array[T]): Unit = {
+  def multiput(rs: Array[(K, T)]): Unit = {
     val newData = rs
     data ++= newData
   }
@@ -75,7 +72,7 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
    *
    * @param rs: Iterator of elements to place in node
    */
-  def multiput(rs: Iterator[T]): Unit = {
+  def multiput(rs: Iterator[(K, T)]): Unit = {
     multiput(rs.toArray)
   }
 
@@ -84,7 +81,7 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
    *
    * @param r: Element to place in node
    */
-  def put(r: T) = {
+  def put(r: (K, T)) = {
     multiput(Array(r))
   }
 
@@ -92,14 +89,14 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
    * Gets all elements in node
    * @return Iterator of (key, value) elements in node
    */
-  def get(): Iterator[(K, T)] = data.map(r => (interval, r)).toIterator
+  def get(): Iterator[(K, T)] = data.toIterator
 
   /**
    * checks whether this node is greater than other Interval K
    * @return Boolean whether this interval > other
    */
   def greaterThan(other: K): Boolean = {
-    interval.start > other.start
+    interval.mid - other.mid > 0
   }
   /**
    * checks whether this node equals other Interval K
@@ -109,12 +106,16 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
     (interval.start == other.start && interval.end == other.end)
   }
 
+  def aboutEquals(other: K): Boolean = {
+    math.abs(interval.mid - other.mid) < Node.threshold
+  }
+
   /**
    * checks whether this node is less than other Interval K
    * @return Boolean whether this interval < other
    */
   def lessThan(other: K): Boolean = {
-    interval.start < other.start
+    interval.mid - other.mid < 0
   }
 
   /**
@@ -127,14 +128,5 @@ protected class Node[K <: Interval, T: ClassTag](interval: K) extends Serializab
 }
 
 object Node {
-
-  /**
-   *
-   * @param interval interval of node
-   * @param data data to place in node
-   * @tparam K Interval type
-   * @tparam T data type
-   * @return new Node[K, V] constructed from data
-   */
-  def apply[K <: Interval, T: ClassTag](interval: K, data: Array[T]) = new Node(interval, data)
+  var threshold: Int = 1000
 }

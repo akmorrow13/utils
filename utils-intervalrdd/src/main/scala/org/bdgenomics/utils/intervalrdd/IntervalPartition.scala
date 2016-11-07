@@ -22,7 +22,7 @@ import org.bdgenomics.utils.intervaltree._
 import org.bdgenomics.utils.misc.Logging
 import scala.reflect.ClassTag
 
-protected class IntervalPartition[K <: Interval, V: ClassTag](protected val iTree: IntervalTree[K, V]) extends Serializable with Logging {
+protected class IntervalPartition[K <: Interval[K], V: ClassTag](protected val iTree: IntervalTree[K, V]) extends Serializable with Logging {
 
   def this() {
     this(new IntervalTree[K, V]())
@@ -30,6 +30,10 @@ protected class IntervalPartition[K <: Interval, V: ClassTag](protected val iTre
 
   def getTree(): IntervalTree[K, V] = {
     iTree
+  }
+
+  def countNodes: Long = {
+    iTree.countNodes()
   }
 
   protected def withMap(map: IntervalTree[K, V]): IntervalPartition[K, V] = {
@@ -86,9 +90,9 @@ protected class IntervalPartition[K <: Interval, V: ClassTag](protected val iTre
    *
    * @return IntervalPartition with new data
    */
-  def multiput(r: K, vs: Iterator[V]): IntervalPartition[K, V] = {
+  def multiput(vs: Iterator[(K, V)]): IntervalPartition[K, V] = {
     val newTree = iTree.snapshot()
-    newTree.insert(r, vs)
+    newTree.insert(vs)
     this.withMap(newTree)
   }
 
@@ -97,8 +101,8 @@ protected class IntervalPartition[K <: Interval, V: ClassTag](protected val iTre
    *
    * @return IntervalPartition with new data
    */
-  def put(r: K, v: V): IntervalPartition[K, V] = {
-    multiput(r, Iterator(v))
+  def put(kv: (K, V)): IntervalPartition[K, V] = {
+    multiput(Iterator(kv))
   }
 
   /**
@@ -115,10 +119,9 @@ protected class IntervalPartition[K <: Interval, V: ClassTag](protected val iTre
 
 private[intervalrdd] object IntervalPartition {
 
-  def apply[K <: Interval, K2 <: Interval, V: ClassTag](iter: Iterator[(K, V)]): IntervalPartition[K, V] = {
-    val map = new IntervalTree[K, V]()
-    map.insert(iter)
-    new IntervalPartition(map)
+  def apply[K <: Interval[K], V: ClassTag](iter: Iterator[(K, V)]): IntervalPartition[K, V] = {
+    val iTree = IntervalTree[K, V](iter)
+    new IntervalPartition(iTree)
   }
 
 }

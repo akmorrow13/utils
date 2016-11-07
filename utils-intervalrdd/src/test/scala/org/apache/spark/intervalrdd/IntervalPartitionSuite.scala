@@ -18,10 +18,8 @@
 
 package org.bdgenomics.utils.intervalrdd
 
-import org.bdgenomics.utils.intervaltree.Interval
+import org.bdgenomics.utils.intervaltree.{ Interval, Region }
 import org.scalatest.FunSuite
-
-case class Region(start: Long, end: Long) extends Interval
 
 class IntervalPartitionSuite extends FunSuite {
 
@@ -71,8 +69,8 @@ class IntervalPartitionSuite extends FunSuite {
 
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    var newPartition = partition.multiput(region1, Iterator(read1, read3))
-    newPartition = newPartition.multiput(region2, Iterator(read2, read4))
+    var newPartition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    newPartition = newPartition.multiput(Iterator((region2, read2), (region2, read4)))
 
     // assert values are in the new partition
     var results: List[(Region, Long)] = newPartition.get(region1).toList
@@ -102,8 +100,8 @@ class IntervalPartitionSuite extends FunSuite {
 
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    var newPartition = partition.multiput(region1, Iterator(read1, read3))
-    newPartition = newPartition.multiput(region2, Iterator(read2, read4))
+    var newPartition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    newPartition = newPartition.multiput(Iterator((region2, read2), (region2, read4)))
 
     // assert values are in the new partition
     var results: List[(Region, Long)] = newPartition.get(region1).toList
@@ -119,8 +117,9 @@ class IntervalPartitionSuite extends FunSuite {
 
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    var newPartition = partition.multiput(region1, Iterator(read1, read3))
-    newPartition = newPartition.multiput(region2, Iterator(read4, read2, read5))
+    var newPartition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    newPartition = newPartition.multiput(Iterator((region2, read2),
+      (region2, read4), (region2, read5)))
 
     // assert values are in the new partition
     var results: List[(Region, Long)] = newPartition.get(region1).toList
@@ -138,8 +137,8 @@ class IntervalPartitionSuite extends FunSuite {
 
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    var newPartition = partition.multiput(region1, Iterator(read1, read3))
-    newPartition = newPartition.multiput(region2, Iterator(read2, read4))
+    var newPartition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    newPartition = newPartition.multiput(Iterator((region2, read2), (region1, read4)))
     newPartition = newPartition.put(region4, read5)
     newPartition = newPartition.put(region5, read6)
 
@@ -154,8 +153,8 @@ class IntervalPartitionSuite extends FunSuite {
 
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    var newPartition = partition.multiput(region1, Iterator(read1, read3))
-    newPartition = newPartition.multiput(region2, Iterator(read2, read4))
+    var newPartition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    newPartition = newPartition.multiput(Iterator((region2, read2), (region1, read4)))
 
     val filtPart = newPartition.filter((k, v) => v < 300L)
     val overlapReg: Region = Region(0L, 300L)
@@ -169,8 +168,8 @@ class IntervalPartitionSuite extends FunSuite {
 
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    var newPartition = partition.multiput(region1, Iterator(read1, read3))
-    newPartition = newPartition.multiput(region2, Iterator(read2, read4))
+    var newPartition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    newPartition = newPartition.multiput(Iterator((region2, read2), (region1, read4)))
 
     val filtPart = newPartition.mapValues(elem => elem + 300L)
 
@@ -182,8 +181,8 @@ class IntervalPartitionSuite extends FunSuite {
   test("delete node from partition") {
     var partition: IntervalPartition[Region, Long] = new IntervalPartition[Region, Long]()
 
-    partition = partition.multiput(region1, Iterator(read1, read3))
-    partition = partition.multiput(region2, Iterator(read2, read4))
+    partition = partition.multiput(Iterator((region1, read1), (region1, read3)))
+    partition = partition.multiput(Iterator((region2, read2), (region1, read4)))
 
     assert(partition.get(region1).length == 2)
 

@@ -23,7 +23,9 @@ package org.bdgenomics.utils.intervaltree
  * Each 2-dimensional coordinate has a defined width.
  * This can be used to express a region of a genome, a transcript, a gene, etc.
  */
-trait Interval {
+trait Interval[T <: Interval[T]] {
+
+  def mid: Long = (end - start) / 2 + start
 
   /**
    * @return The start of this interval.
@@ -34,6 +36,17 @@ trait Interval {
    * @return The end of this interval.
    */
   def end: Long
+
+  /**
+   * Creates a region corresponding to the convex hull of two regions. Has no preconditions about the adjacency or
+   * overlap of two regions. However, regions must be in the same reference space.
+   *
+   * @throws AssertionError Thrown if regions are in different reference spaces.
+   *
+   * @param interval Other region to compute hull of with this region.
+   * @return The convex hull of both unions.
+   */
+  def hull(interval: T): T
 
   /**
    * A width is the key property of an interval, which can represent a genomic

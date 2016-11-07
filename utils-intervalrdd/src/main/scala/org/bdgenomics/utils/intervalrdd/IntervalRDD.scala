@@ -24,7 +24,7 @@ import org.apache.spark.{ Partition, TaskContext, OneToOneDependency, HashPartit
 import org.bdgenomics.utils.intervaltree._
 import scala.reflect.ClassTag
 
-class IntervalRDD[K <: Interval: ClassTag, V: ClassTag](
+class IntervalRDD[K <: Interval[K]: ClassTag, V: ClassTag](
   /** The underlying representation of the IndexedRDD as an RDD of partitions. */
   private val partitionsRDD: RDD[IntervalPartition[K, V]])
     extends RDD[(K, V)](partitionsRDD.context, List(new OneToOneDependency(partitionsRDD))) {
@@ -66,6 +66,17 @@ class IntervalRDD[K <: Interval: ClassTag, V: ClassTag](
     partitionsRDD.map(_.getTree.size).reduce(_ + _)
   }
 
+  def countNodes: Array[Long] = {
+    partitionsRDD.map(_.countNodes).collect
+  }
+
+  def printTrees = {
+    partitionsRDD.map(_.getTree()).foreach(t => {
+      println("NEW TREE")
+      t.printNodes()
+    })
+  }
+
   override def collect: Array[(K, V)] = partitionsRDD.flatMap(r => r.get()).collect
 
   def filterByInterval(r: K): IntervalRDD[K, V] = {
@@ -93,14 +104,14 @@ class IntervalRDD[K <: Interval: ClassTag, V: ClassTag](
    * @tparam V2 data type
    * @return new IntervalRDD of type [K2, V2]
    */
-  def mapIntervalPartitions[K2 <: Interval: ClassTag, V2: ClassTag](
+  def mapIntervalPartitions[K2 <: Interval[K2]: ClassTag, V2: ClassTag](
     f: (IntervalPartition[K, V]) => IntervalPartition[K2, V2]): IntervalRDD[K2, V2] = {
 
     val newPartitionsRDD = partitionsRDD.mapPartitions(_.map(f), preservesPartitioning = true)
     new IntervalRDD(newPartitionsRDD)
   }
 
-  private def withPartitionsRDD[K2 <: Interval: ClassTag, V2: ClassTag](
+  private def withPartitionsRDD[K2 <: Interval[K2]: ClassTag, V2: ClassTag](
     partitionsRDD: RDD[IntervalPartition[K2, V2]]): IntervalRDD[K2, V2] = {
     new IntervalRDD(partitionsRDD)
   }
@@ -154,7 +165,7 @@ class IntervalRDD[K <: Interval: ClassTag, V: ClassTag](
   }
 }
 
-class PartitionMerger[K <: Interval, V: ClassTag]() extends Serializable {
+class PartitionMerger[K <: Interval[K], V: ClassTag]() extends Serializable {
   def apply(thisIter: Iterator[IntervalPartition[K, V]], otherIter: Iterator[IntervalPartition[K, V]]): Iterator[IntervalPartition[K, V]] = {
     val thisPart = thisIter.next
     val otherPart = otherIter.next
@@ -167,7 +178,7 @@ object IntervalRDD {
   /**
    * Constructs an IntervalRDD from a set of interval, V tuples
    */
-  def apply[K <: Interval: ClassTag, V: ClassTag](elems: RDD[(K, V)]): IntervalRDD[K, V] = {
+  def apply[K <: Interval[K]: ClassTag, V: ClassTag](elems: RDD[(K, V)]): IntervalRDD[K, V] = {
     val partitioned =
       if (elems.partitioner.isDefined) elems
       else {

@@ -20,9 +20,27 @@ package org.bdgenomics.utils.intervaltree
 
 import org.scalatest.FunSuite
 
-case class Region(start: Long, end: Long) extends Interval
+case class Region(start: Long, end: Long) extends Interval[Region] {
+  def hull(other: Region): Region = {
+    Region(Math.min(start, other.start), Math.max(end, other.end))
+  }
+}
 
 class IntervalTreeSuite extends FunSuite {
+
+  test("assert nodes update interval to cover all keys") {
+
+    val region1 = Region(0L, 100L)
+    val region2 = Region(200L, 400L)
+    val item1 = (region1, "item1")
+    val item2 = (Region(200L, 400L), "item2")
+
+    val node = new Node[Region, String](item1)
+    assert(node.interval == region1)
+
+    node.put(item2)
+    assert(node.interval == region1.hull(region2))
+  }
 
   test("insert regions to intervaltree") {
 
@@ -75,8 +93,8 @@ class IntervalTreeSuite extends FunSuite {
 
     val tree = new IntervalTree[Region, Long]()
     val region = Region(0, 1000)
-    val r: Iterator[Long] = Iterator(2L, 3L, 4L)
-    tree.insert(region, r)
+    val items: Iterator[(Region, Long)] = Iterator(2L, 3L, 4L).map(r => (region, r))
+    tree.insert(items)
 
     assert(tree.size == 3)
     assert(tree.search(region).size == 3)
@@ -166,8 +184,7 @@ class IntervalTreeSuite extends FunSuite {
     //but we should be left with 6 nodes for insertNode
     for (i <- 1L to 6L) {
       tree1.insert(region, i)
-      val newNode = new Node[Region, Long](region)
-      newNode.put(i)
+      val newNode = new Node[Region, Long]((region, i))
       tree2.insertNode(newNode)
     }
 
@@ -187,18 +204,15 @@ class IntervalTreeSuite extends FunSuite {
     val reg3 = Region(300L, 700L)
 
     tree1.insert(reg1, 1L)
-    val node1 = new Node[Region, Long](reg1)
-    node1.put(1L)
+    val node1 = new Node[Region, Long]((reg1, 1L))
     tree2.insertNode(node1)
 
     tree1.insert(reg1, 2L)
-    val node2 = new Node[Region, Long](reg2)
-    node2.put(2L)
+    val node2 = new Node[Region, Long]((reg2, 2L))
     tree2.insertNode(node2)
 
     tree1.insert(reg1, 3L)
-    val node3 = new Node[Region, Long](reg3)
-    node3.put(3L)
+    val node3 = new Node[Region, Long]((reg3, 3L))
     tree2.insertNode(node3)
 
     assert(tree1.size == tree2.size)
